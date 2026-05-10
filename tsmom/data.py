@@ -54,7 +54,7 @@ def load_from_csv(csv_path: str) -> pd.DataFrame:
 
     # Detect format: if 'symbol' column exists → long format, needs pivot
     if "symbol" in df.columns:
-        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True).dt.tz_localize(None)
         df = df.pivot_table(index="timestamp", columns="symbol", values="close")
     else:
         # Assume first column is date index
@@ -65,6 +65,8 @@ def load_from_csv(csv_path: str) -> pd.DataFrame:
 
     df = df.ffill()
     df.index = pd.to_datetime(df.index)
+    if df.index.tz is not None:
+        df.index = df.index.tz_localize(None)
     df.index.name = "timestamp"
     logger.info("Loaded %d rows × %d symbols from %s", len(df), len(df.columns), csv_path)
     return df
@@ -153,6 +155,8 @@ def load_benchmark_csv(csv_path: str) -> pd.DataFrame:
             break
 
     df.index = pd.to_datetime(df.index)
+    if df.index.tz is not None:
+        df.index = df.index.tz_localize(None)
     df.index.name = "timestamp"
     return df
 

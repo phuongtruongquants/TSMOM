@@ -11,7 +11,10 @@ Usage:
 import argparse
 import logging
 import sys
+import warnings
 from pathlib import Path
+
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 import matplotlib
 matplotlib.use("Agg")  # non-interactive backend for saving figures
