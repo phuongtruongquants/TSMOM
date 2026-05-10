@@ -39,7 +39,6 @@ plans/
 
 # Keep directory structure
 !data/.gitkeep
-!output/.gitkeep
 TSMOM.ipynb
 notebooks/*.ipynb
 notebooks/*.py
