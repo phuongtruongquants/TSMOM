@@ -81,14 +81,14 @@ TSMOM/
 ## Methodology
 
 ### Signal
-$$S_t = \max\left(0,\ \text{sign}\left(\prod_{i=t-W}^{t} (1 + r_i) - 1\right)\right)$$
+$$S_t = \max\!\left(0,\ \mathrm{sign}\!\left(\prod_{i=t-W}^{t} (1 + r_i) - 1\right)\right)$$
 where $W$ is the lookback window (default 6 weeks). Long-only — negative momentum signals are clipped to 0.
 
 ### Ex-Ante Volatility
-$$\sigma_t = \sqrt{252 \cdot \text{EWM}\_\text{var}(r_{t-1}, \text{com}=60)}$$
+$$\sigma_t = \sqrt{252 \cdot \mathrm{EWM}_{\mathrm{var}}(r_{t-1}, \mathrm{com}=60)}$$
 
 ### Position Sizing
-$$\text{pos}_t = S_t \cdot \min\left(\frac{\sigma^*}{\hat\sigma_t},\ 2\right),\quad \sigma^* = 0.40$$
+$$\displaystyle \mathrm{pos}_t = S_t \cdot \min\!\left(\frac{\sigma_{\mathrm{target}}}{\hat\sigma_t},\ 2\right),\quad \sigma_{\mathrm{target}} = 0.40$$
 
 ### Regression
 $$r_{t+h} / \sigma_{t+h-1} = \alpha + \beta_h \cdot (r_t / \sigma_{t-1}) + \varepsilon$$
