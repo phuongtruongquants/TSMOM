@@ -23,6 +23,7 @@ TSMOM/
 ├── README.md
 ├── LICENSE
 ├── requirements.txt
+├── pyproject.toml            # Package metadata & dev config
 ├── config.yaml               # Strategy parameters
 ├── tsmom/
 │   ├── __init__.py
@@ -35,13 +36,23 @@ TSMOM/
 │   └── plotting.py           # Visualization
 ├── scripts/
 │   ├── run_backtest.py       # Main backtest pipeline
-│   └── fetch_data.py         # Download & cache data locally
+│   ├── fetch_data.py         # Download & cache data locally
+│   └── dashboard.py          # Streamlit interactive dashboard
+├── tests/
+│   ├── test_data.py
+│   ├── test_volatility.py
+│   ├── test_signal.py
+│   ├── test_backtest.py
+│   └── test_metrics.py
 ├── data/                     # Local data cache (git-ignored)
 │   └── .gitkeep
 ├── output/                   # Charts and reports (git-ignored)
 │   └── .gitkeep
 ├── notebooks/
 │   └── TSMOM.ipynb           # Original research notebook
+├── docs/
+│   ├── project-roadmap.md
+│   └── project-changelog.md
 └── .gitignore
 ```
 
@@ -77,7 +88,22 @@ This will:
 - Backtest the TSMOM strategy per-stock and as an equal-weight portfolio
 - Generate charts in the `output/` folder
 
-### 4. Customize parameters
+### 4. Explore the interactive dashboard
+
+```bash
+streamlit run scripts/dashboard.py
+```
+
+Opens a 5-tab interactive dashboard with:
+- **Overview** — portfolio metrics, cumulative returns with VN-Index overlay, drawdown
+- **Per-Stock** — return heatmap, return distribution histogram
+- **Regression Evidence** — TSMOM + sign regression t-stat bar charts (live)
+- **TSMOM Smile** — monthly strategy vs benchmark scatter with quadratic fit
+- **Volatility** — per-stock vol distribution vs target, time-series vol for selected stock
+
+Adjust parameters via sidebar sliders and charts recompute live.
+
+### 5. Customize parameters
 
 Edit `config.yaml`:
 
