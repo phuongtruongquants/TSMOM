@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tsmom"
+version = "1.0.0"
+description = "Time-Series Momentum Strategy for Vietnamese Stocks"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+authors = [
+    {name = "Phuong Truong"},
+]
+keywords = ["finance", "momentum", "tsmom", "vietnam-stock-market", "quantitative-finance"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+
+dependencies = [
+    "pandas>=1.5.0",
+    "numpy>=1.21.0",
+    "statsmodels>=0.13.0",
+    "matplotlib>=3.5.0",
+    "seaborn>=0.12.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+vnstock = ["vnstock>=0.3.0"]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.1.0",
+    "streamlit>=1.29.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["tsmom*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"tsmom/regression.py" = ["N806"]  # X, Y are standard stats notation
+"tsmom/plotting.py" = ["N806"]    # X, X_fit for design matrices
+"scripts/dashboard.py" = ["E402"] # sys.path.insert must precede imports
+
+[tool.ruff.format]
+quote-style = "double"

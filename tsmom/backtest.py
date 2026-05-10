@@ -8,10 +8,15 @@ For each stock:
   4. Calculate strategy returns net of transaction costs
 """
 
+import logging
+
 import pandas as pd
 
-from .volatility import exante_volatility
+from .metrics import calculate_metrics
 from .signal import compute_signal
+from .volatility import exante_volatility
+
+logger = logging.getLogger(__name__)
 
 
 def backtest_single(
@@ -57,11 +62,11 @@ def backtest_single(
     signal = compute_signal(weekly_return, window=lookback)
     position = signal * position_size
 
-    # Round-trip cost on position changes
-    trade_cost = 2 * commission * position.diff().abs().shift(-1)
+    # Round-trip cost on position changes, charged when the new position is actually held
+    trade_cost = 2 * commission * position.diff().abs().shift(1)
 
-    # Strategy return: current position × next week's return − cost
-    strat_ret = position * weekly_return.shift(-1) - trade_cost
+    # Strategy return: prior week's position × this week's return − cost
+    strat_ret = position.shift(1) * weekly_return - trade_cost
 
     result = pd.DataFrame({
         "raw_rets": weekly_return,
@@ -73,6 +78,13 @@ def backtest_single(
     })
 
     return result.dropna()
+
+
+def summarize_universe_returns(all_returns: pd.DataFrame) -> tuple[pd.Series, pd.DataFrame]:
+    """Aggregate per-symbol returns into equal-weight portfolio returns and metrics."""
+    portfolio_returns = all_returns.mean(axis=1).dropna()
+    portfolio_metrics = calculate_metrics(portfolio_returns)
+    return portfolio_returns, portfolio_metrics
 
 
 def backtest_universe(
@@ -100,8 +112,6 @@ def backtest_universe(
     all_metrics : pd.DataFrame
         Performance metrics per symbol.
     """
-    from .metrics import calculate_metrics
-
     all_returns = pd.DataFrame()
     all_metrics = pd.DataFrame()
 
@@ -119,8 +129,7 @@ def backtest_universe(
 
             metrics = calculate_metrics(result["strat_rets"])
             all_metrics[symbol] = metrics["metrics"]
-        except Exception as exc:
-            import logging
-            logging.getLogger(__name__).warning("Skipping %s: %s", symbol, exc)
+        except (ValueError, KeyError, IndexError) as exc:
+            logger.warning("Skipping %s: %s: %s", symbol, type(exc).__name__, exc)
 
     return all_returns, all_metrics

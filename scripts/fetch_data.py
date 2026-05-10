@@ -26,7 +26,7 @@ def main():
     parser = argparse.ArgumentParser(description="Fetch VN stock data via vnstock")
     parser.add_argument("--symbols", nargs="+", default=None, help="Symbols to fetch")
     parser.add_argument("--start", default="2014-01-01", help="Start date")
-    parser.add_argument("--end", default="2025-03-20", help="End date")
+    parser.add_argument("--end", default="2026-05-11", help="End date")
     parser.add_argument("--output", default="data/stock_prices.csv", help="Output CSV path")
     args = parser.parse_args()
 
@@ -35,10 +35,14 @@ def main():
 
     df = load_from_vnstock(symbols=symbols, start=args.start, end=args.end)
 
+    # Save in long format: timestamp, symbol, close
+    long_df = df.reset_index().melt(id_vars="timestamp", var_name="symbol", value_name="close")
+    long_df = long_df.dropna(subset=["close"]).sort_values(["symbol", "timestamp"])
+
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(out_path)
-    logger.info("Saved %d rows × %d columns to %s", len(df), len(df.columns), out_path)
+    long_df.to_csv(out_path, index=False)
+    logger.info("Saved %d rows × %d columns to %s", len(long_df), len(long_df.columns), out_path)
 
 
 if __name__ == "__main__":

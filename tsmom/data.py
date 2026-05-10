@@ -75,10 +75,10 @@ def load_from_csv(csv_path: str) -> pd.DataFrame:
 def load_from_vnstock(
     symbols: list[str] | None = None,
     start: str = "2014-01-01",
-    end: str = "2025-03-20",
+    end: str = "2026-05-11",
 ) -> pd.DataFrame:
     """
-    Fetch daily close prices from vnstock / vnstock_data.
+    Fetch daily close prices from vnstock_data.
 
     Parameters
     ----------
@@ -92,19 +92,16 @@ def load_from_vnstock(
     pd.DataFrame
         Pivoted DataFrame: index=DatetimeIndex, columns=symbols, values=close
     """
-    # Try vnstock_data first, fall back to vnstock
     try:
-        from vnstock_data import Vnstock
-        logger.info("Using vnstock_data backend")
-    except ImportError:
+        from vnstock_data import Quote
+    except ImportError as outer_exc:
         try:
-            from vnstock import Vnstock
-            logger.info("Using vnstock backend")
+            from vnstock.api.quote import Quote
         except ImportError:
             raise ImportError(
                 "Neither vnstock_data nor vnstock is installed.\n"
-                "Install with:  pip install vnstock   or   pip install vnstock_data"
-            )
+                "Install with:  pip install vnstock_data   or   pip install vnstock"
+            ) from outer_exc
 
     if symbols is None:
         symbols = DEFAULT_SYMBOLS
@@ -112,26 +109,24 @@ def load_from_vnstock(
     frames = {}
     for sym in symbols:
         try:
-            stock = Vnstock().stock(symbol=sym, source="VCI")
-            hist = stock.quote.history(start=start, end=end, interval="1D")
+            q = Quote(symbol=sym, source="VCI")
+            hist = q.history(start=start, end=end, interval="1D")
             if hist is not None and not hist.empty:
-                # Normalize column name
-                close_col = [c for c in hist.columns if c.lower() == "close"]
-                time_col = [c for c in hist.columns if c.lower() in ("time", "timestamp", "date")]
-                if close_col and time_col:
-                    series = hist.set_index(time_col[0])[close_col[0]]
-                    series.index = pd.to_datetime(series.index)
-                    frames[sym] = series
-                    logger.info("  ✓ %s: %d rows", sym, len(series))
-        except Exception as exc:
-            logger.warning("  ✗ %s: %s", sym, exc)
+                time_col = "time" if "time" in hist.columns else hist.columns[0]
+                close_col = "close"
+                series = hist.set_index(time_col)[close_col]
+                series.index = pd.to_datetime(series.index)
+                frames[sym] = series
+                logger.info("  ✓ %s: %d rows", sym, len(series))
+        except (ValueError, KeyError, IndexError) as exc:
+            logger.warning("  ✗ %s: %s: %s", sym, type(exc).__name__, exc)
 
     if not frames:
         raise RuntimeError("No data fetched. Check network and vnstock installation.")
 
     df = pd.DataFrame(frames).ffill()
     df.index.name = "timestamp"
-    logger.info("Fetched %d rows × %d symbols via vnstock", len(df), len(df.columns))
+    logger.info("Fetched %d rows × %d symbols via vnstock_data", len(df), len(df.columns))
     return df
 
 
