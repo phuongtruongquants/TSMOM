@@ -25,11 +25,14 @@ env/
 Thumbs.db
 
 # Data & output (large files, regeneratable)
-data/*.csv
 data/*.parquet
 output/*.png
 output/*.pdf
 output/*.xlsx
+
+# Claude
+.claude/
+plans/
 
 # Jupyter
 .ipynb_checkpoints/
