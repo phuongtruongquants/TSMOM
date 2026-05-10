@@ -1,152 +1,118 @@
-# TSMOM — Time-Series Momentum Strategy for Vietnamese Stocks
+# TSMOM — Time-Series Momentum for Vietnamese Stocks
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-28%20passed-green.svg)](tests/)
+[![Ruff](https://img.shields.io/badge/lint-ruff%20clean-blue.svg)](pyproject.toml)
 
-An implementation of the **Time-Series Momentum (TSMOM)** strategy applied to the Vietnamese stock market, based on the framework from [Moskowitz, Ooi, and Pedersen (2012)](https://pages.stern.nyu.edu/~lpederse/papers/TimeSeriesMomentum.pdf).
+Implementation of the **Time-Series Momentum (TSMOM)** strategy applied to 60 Vietnamese stocks, based on [Moskowitz, Ooi & Pedersen (2012)](https://pages.stern.nyu.edu/~lpederse/papers/TimeSeriesMomentum.pdf).
 
-## Overview
+## Live Dashboard
 
-This project implements a complete TSMOM pipeline:
+**[ptqtsmom.streamlit.app](https://ptqtsmom.streamlit.app)** — interactive 6-tab dashboard with live parameter controls.
 
-1. **Data Loading** — Fetch historical price data via `vnstock` / `vnstock_data`, or from a local CSV
-2. **Volatility Estimation** — Ex-ante annualized volatility using exponentially weighted variance (COM=60)
-3. **Regression Evidence** — Pooled OLS regressions testing momentum predictability across lags
-4. **Signal Generation** — Long-only momentum signals from rolling cumulative returns
-5. **Backtesting** — Full backtest with volatility-targeted position sizing and transaction costs
-6. **Portfolio Analysis** — Equal-weight TSMOM portfolio across 60 stocks, benchmark comparison vs VN-Index
+## Results (2014–2026, 60 HOSE stocks)
+
+| Metric | TSMOM Portfolio |
+|--------|:--------------:|
+| Annualized Return | 15.69% |
+| Annualized Volatility | 12.21% |
+| Sharpe Ratio | 1.28 |
+| Max Drawdown | -16.54% |
+| Positive Weeks | 59.5% |
+| Momentum t-stat (lag 1) | 11.47 |
+
+## Quick Start
+
+```bash
+# Install
+pip install -r requirements.txt
+
+# Run backtest pipeline
+python scripts/run_backtest.py
+
+# Launch interactive dashboard
+streamlit run scripts/dashboard.py
+```
+
+The repo ships with 60 stocks of daily price data (`data/stock_prices.csv`). To refresh it:
+
+```bash
+pip install vnstock_data
+python scripts/fetch_data.py --start 2014-01-01 --end 2026-05-11
+```
+
+## Dashboard Tabs
+
+| Tab | What it shows |
+|-----|--------------|
+| Overview | Portfolio metrics, cumulative return vs VN-Index, drawdown |
+| Per-Stock | Return heatmap, distribution histogram |
+| Regression Evidence | TSMOM + sign regression t-stat charts (live) |
+| TSMOM Smile | Monthly strategy vs benchmark scatter with quadratic fit |
+| Volatility | Per-stock vol vs target, time-series for selected stock |
+| Stability | Parameter sweep across lookback × vol target × EWM com |
+
+Sliders update all charts in real time.
 
 ## Project Structure
 
 ```
 TSMOM/
-├── README.md
-├── LICENSE
-├── requirements.txt
-├── pyproject.toml            # Package metadata & dev config
-├── config.yaml               # Strategy parameters
-├── tsmom/
-│   ├── __init__.py
-│   ├── data.py               # Data loading (vnstock / CSV)
-│   ├── volatility.py         # Ex-ante volatility estimation
-│   ├── regression.py         # Momentum regression tests
-│   ├── signal.py             # Signal generation
-│   ├── backtest.py           # Backtesting engine
-│   ├── metrics.py            # Performance metrics
-│   └── plotting.py           # Visualization
+├── tsmom/                  # Core library
+│   ├── data.py             # CSV / vnstock_data loading
+│   ├── volatility.py       # Ex-ante vol (EWM, com=60)
+│   ├── regression.py       # Pooled OLS momentum tests
+│   ├── signal.py           # Long-only momentum signal
+│   ├── backtest.py         # Per-stock & universe backtester
+│   ├── metrics.py          # Sharpe, drawdown, skew, kurtosis
+│   └── plotting.py         # Matplotlib charts
 ├── scripts/
-│   ├── run_backtest.py       # Main backtest pipeline
-│   ├── fetch_data.py         # Download & cache data locally
-│   └── dashboard.py          # Streamlit interactive dashboard
-├── tests/
-│   ├── test_data.py
-│   ├── test_volatility.py
-│   ├── test_signal.py
-│   ├── test_backtest.py
-│   └── test_metrics.py
-├── data/                     # Local data cache (git-ignored)
-│   └── .gitkeep
-├── output/                   # Charts and reports (git-ignored)
-│   └── .gitkeep
-├── notebooks/
-│   └── TSMOM.ipynb           # Original research notebook
-├── docs/
-│   ├── project-roadmap.md
-│   └── project-changelog.md
-└── .gitignore
+│   ├── dashboard.py        # Streamlit (6 tabs, live controls)
+│   ├── run_backtest.py     # CLI pipeline
+│   └── fetch_data.py       # Download from vnstock_data
+├── tests/                  # pytest (28 tests)
+├── data/stock_prices.csv   # 60 stocks, 2014–2026
+├── config.yaml             # Strategy parameters
+├── pyproject.toml          # Package & dev config
+└── docs/                   # Roadmap & changelog
 ```
 
-## Quick Start
+## Methodology
 
-### 1. Install dependencies
+### Signal
+$$S_t = \max\left(0,\ \text{sign}\left(\prod_{i=t-W}^{t} (1 + r_i) - 1\right)\right)$$
+where $W$ is the lookback window (default 6 weeks). Long-only — negative momentum signals are clipped to 0.
 
-```bash
-pip install -r requirements.txt
-```
+### Ex-Ante Volatility
+$$\sigma_t = \sqrt{252 \cdot \text{EWM}\_\text{var}(r_{t-1}, \text{com}=60)}$$
 
-### 2. Prepare data
+### Position Sizing
+$$\text{pos}_t = S_t \cdot \min\left(\frac{\sigma^*}{\hat\sigma_t},\ 2\right),\quad \sigma^* = 0.40$$
 
-**Option A — Download via vnstock:**
-```bash
-python scripts/fetch_data.py
-```
+### Regression
+$$r_{t+h} / \sigma_{t+h-1} = \alpha + \beta_h \cdot (r_t / \sigma_{t-1}) + \varepsilon$$
 
-**Option B — Use your own CSV:**
-
-Place a CSV file at `data/stock_prices.csv` with columns: `timestamp`, `symbol`, `close`.
-
-### 3. Run the full backtest
-
-```bash
-python scripts/run_backtest.py
-```
-
-This will:
-- Load price data for ~60 Vietnamese stocks
-- Compute ex-ante volatility
-- Run momentum regression tests
-- Backtest the TSMOM strategy per-stock and as an equal-weight portfolio
-- Generate charts in the `output/` folder
-
-### 4. Explore the interactive dashboard
-
-```bash
-streamlit run scripts/dashboard.py
-```
-
-Opens a 5-tab interactive dashboard with:
-- **Overview** — portfolio metrics, cumulative returns with VN-Index overlay, drawdown
-- **Per-Stock** — return heatmap, return distribution histogram
-- **Regression Evidence** — TSMOM + sign regression t-stat bar charts (live)
-- **TSMOM Smile** — monthly strategy vs benchmark scatter with quadratic fit
-- **Volatility** — per-stock vol distribution vs target, time-series vol for selected stock
-
-Adjust parameters via sidebar sliders and charts recompute live.
-
-### 5. Customize parameters
+## Customize
 
 Edit `config.yaml`:
 
 ```yaml
 strategy:
-  vol_target: 0.40        # Annualized volatility target
-  lookback_window: 6      # Weeks of lookback for momentum signal
-  commission: 0.001       # One-way transaction cost
-  margin_cap: 2.0         # Maximum leverage
-  ewm_com: 60             # EWM center-of-mass for volatility
-
-data:
-  source: "csv"           # "csv" or "vnstock"
-  csv_path: "data/stock_prices.csv"
-  start_date: "2014-01-01"
-  end_date: "2025-03-20"
+  vol_target: 0.40       # Annualized vol target
+  lookback_window: 6     # Momentum lookback (weeks)
+  commission: 0.001      # One-way transaction cost
+  margin_cap: 2.0        # Max leverage
+  ewm_com: 60            # EWM center-of-mass
 ```
 
-## Key Concepts
+## Tests
 
-### Ex-Ante Volatility
-
-$$\sigma_t = \sqrt{252 \cdot \text{EWM}\_\text{var}(r_{t-1}, \text{com}=60)}$$
-
-### Momentum Regression
-
-$$(r_{t+h} / \sigma_{t+h-1}) = \alpha + \beta_h \cdot (r_t / \sigma_{t-1}) + \varepsilon$$
-
-### Position Sizing
-
-$$\text{position}_t = \text{signal}_t \cdot \min\left(\frac{\sigma^*}{\hat\sigma_t},\; 2\right)$$
-
-where $\sigma^* = 0.40$ is the volatility target.
-
-## Output
-
-The pipeline generates:
-- **Per-stock backtest** with cumulative returns, position sizes, and signals
-- **Regression t-stat charts** by lag
-- **Portfolio cumulative return** chart
-- **Return / volatility distribution** histograms
-- **TSMOM vs VN-Index scatter** with quadratic fit
-- **Summary metrics table** (annualized return, Sharpe, skewness, kurtosis)
+```bash
+pip install -e ".[dev]"
+python -m pytest tests/ -v   # 28 passed
+python -m ruff check tsmom/  # clean
+```
 
 ## References
 
