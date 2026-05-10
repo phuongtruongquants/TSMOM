@@ -1,0 +1,25 @@
+# ──────────────────────────────────────────────
+# TSMOM Strategy Configuration
+# ──────────────────────────────────────────────
+
+strategy:
+  vol_target: 0.40          # Annualized volatility target
+  lookback_window: 6        # Rolling window (weeks) for momentum signal
+  commission: 0.001         # One-way transaction cost (0.1%)
+  margin_cap: 2.0           # Maximum leverage multiplier
+  ewm_com: 60               # Center-of-mass for EWM volatility
+  annualization: 252        # Trading days per year
+
+regression:
+  max_lag: 50               # Maximum lag for regression tests
+
+data:
+  source: "csv"             # "csv" or "vnstock"
+  csv_path: "data/stock_prices.csv"
+  benchmark_csv: "data/vni.csv"
+  start_date: "2014-01-01"
+  end_date: "2025-03-20"
+
+output:
+  dir: "output"
+  dpi: 200

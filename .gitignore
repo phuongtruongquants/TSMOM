@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data & output (large files, regeneratable)
+data/*.csv
+data/*.parquet
+output/*.png
+output/*.pdf
+output/*.xlsx
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Keep directory structure
+!data/.gitkeep
+!output/.gitkeep
+TSMOM.ipynb
