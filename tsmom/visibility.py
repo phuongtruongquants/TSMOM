@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 def build_visibility_graph(series: np.ndarray) -> nx.Graph:
     """Build a natural visibility graph from a 1-D time series."""
     vg = NaturalVG(directed=None)
-    return vg.build(series).as_networkx()
+    return vg.build(np.asarray(series).copy()).as_networkx()
 
 
 def detect_regimes(prices: pd.Series) -> tuple[list[set[int]], list[str], list[int]]:
