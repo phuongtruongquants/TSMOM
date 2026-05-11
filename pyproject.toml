@@ -60,6 +60,8 @@ select = ["E", "F", "W", "I", "N", "UP", "B", "SIM"]
 [tool.ruff.lint.per-file-ignores]
 "tsmom/regression.py" = ["N806"]  # X, Y are standard stats notation
 "tsmom/plotting.py" = ["N806"]    # X, X_fit for design matrices
+"tsmom/visibility.py" = ["N806"]  # G for graph object
+"tests/test_visibility.py" = ["N806"]  # G for graph object
 "scripts/dashboard.py" = ["E402"] # sys.path.insert must precede imports
 
 [tool.ruff.format]
