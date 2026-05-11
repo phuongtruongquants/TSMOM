@@ -26,6 +26,7 @@ def backtest_single(
     commission: float = 0.001,
     margin_cap: float = 2.0,
     ewm_com: int = 60,
+    risk_scale: pd.Series | None = None,
 ) -> pd.DataFrame:
     """
     Backtest the TSMOM strategy on a single stock.
@@ -44,6 +45,9 @@ def backtest_single(
         Maximum leverage allowed (default 2.0).
     ewm_com : int
         Center of mass for volatility estimation (default 60).
+    risk_scale : pd.Series or None
+        Weekly risk multiplier [0, 1] from visibility-graph warning system.
+        None means no risk scaling (default behaviour).
 
     Returns
     -------
@@ -61,6 +65,11 @@ def backtest_single(
 
     signal = compute_signal(weekly_return, window=lookback)
     position = signal * position_size
+
+    # Apply graph-based risk scaling if provided
+    if risk_scale is not None:
+        rs = risk_scale.reindex(position.index).ffill().fillna(1.0)
+        position = position * rs
 
     # Round-trip cost on position changes, charged when the new position is actually held
     trade_cost = 2 * commission * position.diff().abs().shift(1)
@@ -94,6 +103,7 @@ def backtest_universe(
     commission: float = 0.001,
     margin_cap: float = 2.0,
     ewm_com: int = 60,
+    risk_scale: pd.Series | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Run the TSMOM backtest across all stocks in the universe.
@@ -104,6 +114,8 @@ def backtest_universe(
         Daily close prices: index=dates, columns=symbols.
     vol_target, lookback, commission, margin_cap, ewm_com :
         Strategy parameters (see `backtest_single`).
+    risk_scale : pd.Series or None
+        Weekly risk multiplier from visibility-graph warning system.
 
     Returns
     -------
@@ -124,6 +136,7 @@ def backtest_universe(
                 commission=commission,
                 margin_cap=margin_cap,
                 ewm_com=ewm_com,
+                risk_scale=risk_scale,
             )
             all_returns[symbol] = result["strat_rets"]
 

@@ -26,6 +26,7 @@ from tsmom.volatility import compute_weekly_volatility, exante_volatility
 from tsmom.regression import run_tsmom_regressions, run_sign_regressions
 from tsmom.backtest import backtest_universe, summarize_universe_returns
 from tsmom.metrics import calculate_metrics, summarize_metrics
+from tsmom.visibility import compute_risk_scale, detect_regimes, rolling_graph_features
 
 st.set_page_config(
     page_title="TSMOM — Vietnam Momentum Dashboard",
@@ -137,6 +138,36 @@ with st.spinner("Dang chay backtest..."):
         daily_prices, vol_target, lookback, commission, margin_cap, ewm_com,
     )
 
+
+@st.cache_data(ttl=600)
+def load_graph_features():
+    """Load pre-computed VN-Index graph features and risk scale."""
+    gf_path = Path("data/graph_features.csv")
+    rs_path = Path("data/risk_scale.csv")
+    if not gf_path.exists():
+        return None, None
+
+    gf = pd.read_csv(gf_path, index_col=0, parse_dates=True)
+    risk = pd.read_csv(rs_path, index_col=0, parse_dates=True, squeeze=False)
+    risk_series = risk.iloc[:, 0] if not risk.empty else None
+    return gf, risk_series
+
+
+@st.cache_data(ttl=600)
+def run_backtest_with_warning(_daily_prices, _risk_scale, _vol_target, _lookback, _commission, _margin_cap, _ewm_com):
+    cpu = _daily_prices.copy()
+    all_returns, all_metrics = backtest_universe(
+        cpu,
+        vol_target=_vol_target,
+        lookback=_lookback,
+        commission=_commission,
+        margin_cap=_margin_cap,
+        ewm_com=_ewm_com,
+        risk_scale=_risk_scale,
+    )
+    port_ret, port_metrics = summarize_universe_returns(all_returns)
+    return port_ret, port_metrics
+
 # ── About the strategy (collapsed by default) ──────────
 with st.expander("Ve chien luoc nay — tai sao lai la TSMOM?"):
     st.markdown("""
@@ -160,8 +191,8 @@ with st.expander("Ve chien luoc nay — tai sao lai la TSMOM?"):
     """)
 
 # ── Tabs ─────────────────────────────────────────────────
-tab_overview, tab_backtest, tab_regression, tab_smile, tab_vol, tab_stability = st.tabs([
-    "Overview", "How It Works", "Regression Evidence", "TSMOM Smile", "Volatility", "Stability",
+tab_overview, tab_backtest, tab_regression, tab_smile, tab_vol, tab_stability, tab_graph = st.tabs([
+    "Overview", "How It Works", "Regression Evidence", "TSMOM Smile", "Volatility", "Stability", "Graph Warning",
 ])
 
 # ── Tab 1: Overview ──────────────────────────────────────
@@ -692,6 +723,226 @@ with tab_stability:
 
         st.markdown("**Bang xep hang cac bo tham so**")
         st.dataframe(display.head(10), use_container_width=True, hide_index=True)
+
+# ── Tab 7: Graph Warning ─────────────────────────────────
+with tab_graph:
+    st.subheader("Visibility Graph — canh bao rui ro som")
+
+    st.markdown("""
+    Day la phan nang cao nhat cua dashboard. Thay vi chi dung momentum thuan tuy,
+    chung toi xay dung mot **he thong canh bao som** dua tren ly thuyet do thi (graph theory).
+
+    **Y tuong:** Chuyen doi chuoi gia co phieu thanh mot mang luoi (network), sau do trich xuat
+    cac dac trung cau truc cua mang de phat hien khi nao thi truong dang "bat thuong".
+
+    Hai chi bao duoc su dung:
+    - **Diameter** — do dai duong di dai nhat trong mang. Cao = thi truong phan manh, thong tin
+      lan truyen cham = rui ro tang.
+    - **Betweenness Centrality Variance** — do phan tan cua suc anh huong giua cac node.
+      Cao = mot vai node thong tri = cau truc de vo.
+    """)
+
+    gf, risk_series = load_graph_features()
+
+    if gf is None:
+        st.warning("Chua co du lieu graph features. Chay `python scripts/generate_graph_features.py` truoc.")
+    else:
+        # ── Graph Features Time-series ──
+        st.subheader("Chi bao do thi theo thoi gian")
+
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 7), dpi=plot_dpi, sharex=True)
+
+        ax1.plot(gf.index, gf["diameter"], color="steelblue", lw=1)
+        ax1.set_ylabel("Diameter")
+        ax1.set_title("Visibility Graph Diameter (VN-Index, rolling 60d)")
+        ax1.grid(True, linestyle="--", alpha=0.4)
+        # 90th and 99th percentile lines
+        p90_d = gf["diameter"].quantile(0.9)
+        p99_d = gf["diameter"].quantile(0.99)
+        ax1.axhline(y=p90_d, color="orange", ls="--", lw=1, label=f"90th pct ({p90_d:.1f})")
+        ax1.axhline(y=p99_d, color="red", ls="--", lw=1, label=f"99th pct ({p99_d:.1f})")
+        ax1.legend(loc="upper left")
+
+        ax2.plot(gf.index, gf["betw_var"], color="darkgreen", lw=1)
+        ax2.set_ylabel("Betw. Var")
+        ax2.set_title("Betweenness Centrality Variance (VN-Index, rolling 60d)")
+        ax2.grid(True, linestyle="--", alpha=0.4)
+        p90_b = gf["betw_var"].quantile(0.9)
+        p99_b = gf["betw_var"].quantile(0.99)
+        ax2.axhline(y=p90_b, color="orange", ls="--", lw=1, label=f"90th pct ({p90_b:.4f})")
+        ax2.axhline(y=p99_b, color="red", ls="--", lw=1, label=f"99th pct ({p99_b:.4f})")
+        ax2.legend(loc="upper left")
+
+        plt.tight_layout()
+        st.pyplot(fig)
+        plt.close(fig)
+
+        st.markdown("""
+        **Cach doc:** Khi diameter hoac betweenness variance vuot qua nguong 90% (duong cam),
+        he thong bat dau giam vi the. Khi vuot 99% (duong do), vi the bi giam toi da.
+
+        Day khong phai la tin hieu mua/ban — day la **cong tac an toan**. No bao: "thi truong
+        dang bat thuong, giam bot vi lai de bao toan von."
+        """)
+
+        # ── Risk Scale ──
+        if risk_series is not None:
+            st.subheader("He so rui ro (Risk Scale)")
+            st.markdown("""
+            Risk scale = 1.0 nghia la giu nguyen vi the. < 1.0 nghia la giam vi the.
+            Muc thap nhat la 0.2 (chi giu 20% vi te binh thuong) khi ca hai chi bao cung
+            vuot nguong nguy hiem.
+            """)
+
+            fig, ax = plt.subplots(figsize=(14, 3), dpi=plot_dpi)
+            ax.plot(risk_series.index, risk_series.values, color="crimson", lw=1)
+            ax.fill_between(risk_series.index, risk_series.values, 1.0,
+                           color="crimson", alpha=0.15)
+            ax.axhline(y=1.0, color="green", ls="--", lw=1, label="Full position (1.0)")
+            ax.axhline(y=0.2, color="red", ls="--", lw=1, label="Min position (0.2)")
+            ax.set_ylabel("Risk Scale")
+            ax.set_title("He so canh bao rui ro — VN-Index")
+            ax.legend()
+            ax.grid(True, linestyle="--", alpha=0.4)
+            ax.set_ylim(0, 1.15)
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.close(fig)
+
+            pct_active = (risk_series < 1.0).mean()
+            pct_extreme = (risk_series < 0.5).mean()
+            st.markdown(f"""
+            He thong kich hoat giam vi the trong **{pct_active:.1%}** thoi gian.
+            Trong do, muc giam manh (< 0.5) xay ra **{pct_extreme:.1%}** thoi gian.
+            """)
+
+            # ── Performance Comparison ──
+            st.subheader("So sanh hieu suat: TSMOM vs TSMOM + Graph Warning")
+            st.markdown("Chay backtest ca hai phien ban de so sanh...")
+
+            with st.spinner("Dang chay backtest co graph warning..."):
+                port_ret_warn, port_metrics_warn = run_backtest_with_warning(
+                    daily_prices, risk_series, vol_target, lookback, commission, margin_cap, ewm_com,
+                )
+
+            col1, col2, col3 = st.columns(3)
+            sharpe_base = port_metrics.loc["Sharpe Ratio", "metrics"]
+            sharpe_warn = port_metrics_warn.loc["Sharpe Ratio", "metrics"]
+            ret_base = port_metrics.loc["Annualized Return", "metrics"]
+            ret_warn = port_metrics_warn.loc["Annualized Return", "metrics"]
+
+            delta_sharpe = sharpe_warn - sharpe_base
+            delta_ret = ret_warn - ret_base
+
+            col1.metric("Sharpe (Base)", f"{sharpe_base:.2f}",
+                       delta=f"{delta_sharpe:+.2f}",
+                       delta_color="normal")
+            col2.metric("Loi nhuan nam (Base)", f"{ret_base:.1%}",
+                       delta=f"{delta_ret:+.1%}",
+                       delta_color="normal")
+            maxdd_base = port_metrics.loc["Max Drawdown", "metrics"]
+            maxdd_warn = port_metrics_warn.loc["Max Drawdown", "metrics"]
+            col3.metric("Max Drawdown (Base)", f"{maxdd_base:.1%}",
+                       delta=f"{maxdd_warn - maxdd_base:+.1%}",
+                       delta_color="inverse")
+
+            st.markdown(f"""
+            **Nhan xet:**
+
+            {"Graph warning **cai thien** Sharpe them {delta_sharpe:+.2f}." if delta_sharpe > 0 else "Graph warning chua cai thien Sharpe trong bo tham so nay."}
+
+            Muc dich khong phai la toi uu hoa Sharpe — ma la **tach bach co che alpha
+            khoi co che quan tri rui ro**. Khi ban co the nhin thay ro dau la loi nhuan
+            tu momentum, dau la bao ve tu graph warning, ban co the dieu chinh tung thanh
+            phan doc lap — he thong minh bach va dang tin hon.
+
+            So voi VNQuant article (Sharpe 0.97 → 1.04 tren HPG), ket qua cua chung toi
+            ap dung warning **cho toan bo danh muc 60 co phieu** dua tren VN-Index lam
+            tin hieu chung — khac voi article ap dung rieng cho tung co phieu.
+            """)
+
+            # Cumulative comparison chart
+            st.subheader("Loi nhuan tich luy — co va khong co Graph Warning")
+            fig, ax = plt.subplots(figsize=(14, 5), dpi=plot_dpi)
+            cum_base = (1 + port_ret).cumprod()
+            cum_warn = (1 + port_ret_warn).cumprod()
+            cum_base.plot(ax=ax, color="royalblue", lw=1.5, label="TSMOM")
+            cum_warn.plot(ax=ax, color="crimson", lw=1.5, label="TSMOM + Graph Warning")
+            ax.set_ylabel("Cumulative Return")
+            ax.grid(True, linestyle="--", alpha=0.6)
+            ax.legend()
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.close(fig)
+
+    # ── Regime Map (per-stock) ──
+    st.markdown("---")
+    st.subheader("Ban do Regime — Phan vung thi truong")
+
+    st.markdown("""
+    Visibility graph + thuat toan Louvain phan cac ngay giao dich thanh cac
+    **regime** (che do thi truong) dua tren cau truc do thi, khong can nhan truoc.
+
+    Moi mau tuong ung voi mot regime khac nhau: bull, bear, sideways, crash...
+    Day la unsupervised learning — thuat toan tu tim ra cac nhom ma khong can
+    duoc "day" truoc the nao la bull, the nao la bear.
+    """)
+
+    regime_symbol = st.selectbox(
+        "Chon co phieu de phan tich regime",
+        list(daily_prices.columns),
+        index=list(daily_prices.columns).index("HPG") if "HPG" in daily_prices.columns else 0,
+        key="regime_stock",
+    )
+
+    if st.button("Chay phan tich Regime", key="run_regime"):
+        with st.spinner(f"Dang phan tich regime cho {regime_symbol}..."):
+            try:
+                prices = daily_prices[regime_symbol].dropna()
+                communities, node_colors, color_palette = detect_regimes(prices)
+
+                fig, ax = plt.subplots(figsize=(14, 5), dpi=plot_dpi)
+
+                for i in range(len(prices) - 1):
+                    ax.plot(prices.index[i:i + 2], prices.values[i:i + 2],
+                           color=node_colors[i], lw=1.5, alpha=0.8)
+
+                ax.set_title(f"Regime Map — {regime_symbol} ({len(communities)} regimes)")
+                ax.set_ylabel("Price")
+                ax.grid(True, linestyle="--", alpha=0.3)
+
+                # Legend
+                from matplotlib.patches import Patch
+                legend_elements = []
+                for cid in range(min(len(communities), 10)):
+                    legend_elements.append(Patch(
+                        facecolor=color_palette[cid % len(color_palette)],
+                        label=f"Regime {cid + 1} ({len(communities[cid])} days)",
+                    ))
+                ax.legend(handles=legend_elements, loc="upper left", fontsize=8,
+                         ncol=2)
+
+                plt.tight_layout()
+                st.pyplot(fig)
+                plt.close(fig)
+
+                st.markdown(f"""
+                Tim thay **{len(communities)} regimes** trong {len(prices)} ngay giao dich.
+
+                So ngay trung binh moi regime: **{len(prices) / len(communities):.0f} ngay**
+                (~{len(prices) / len(communities) / 5:.0f} tuan giao dich).
+                Regime ngan nhat: **{min(len(c) for c in communities)} ngay**.
+                Regime dai nhat: **{max(len(c) for c in communities)} ngay**.
+
+                Viec xac dinh regime giup nhan dien cac giai doan thi truong khac nhau
+                ma khong can dinh nghia cung nhac (vi du: "bull la khi tang 20%").
+                Moi regime la mot che do dong luc rieng, va viec biet minh dang o
+                regime nao giup lua chon chien luoc phu hop.
+                """)
+            except Exception as exc:
+                st.error(f"Loi khi phan tich regime: {exc}")
+    else:
+        st.info("Chon co phieu va bam 'Chay phan tich Regime' de bat dau.")
 
 # ── Sidebar footer ───────────────────────────────────────
 st.sidebar.markdown("---")
