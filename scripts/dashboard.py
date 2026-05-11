@@ -68,7 +68,7 @@ plot_dpi = st.sidebar.slider("Chart DPI", 100, 300, 150, 25)
 st.title("TSMOM — Time-Series Momentum for Vietnamese Stocks")
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=600)
 def load_all_data():
     cfg_copy = dict(cfg)
     cfg_copy.setdefault("data", {})["source"] = "csv"
