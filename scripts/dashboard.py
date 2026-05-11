@@ -148,7 +148,7 @@ def load_graph_features():
         return None, None
 
     gf = pd.read_csv(gf_path, index_col=0, parse_dates=True)
-    risk = pd.read_csv(rs_path, index_col=0, parse_dates=True, squeeze=False)
+    risk = pd.read_csv(rs_path, index_col=0, parse_dates=True)
     risk_series = risk.iloc[:, 0] if not risk.empty else None
     return gf, risk_series
 
